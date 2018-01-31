@@ -9,7 +9,7 @@ using System.IO;
 
 namespace Robots
 {
-    static class Util
+    internal static class Util
     {
         public const double DistanceTol = 0.001;
         public const double AngleTol = 0.001;
@@ -103,5 +103,27 @@ namespace Robots
                     enumerator.Dispose();
             }
         }
+
+        #region ABB quaternion conversions
+        internal static Plane QuaternionToPlane(Point3d point, Quaternion quaternion)
+        {
+            quaternion.GetRotation(out Plane plane);
+            plane.Origin = point;
+            return plane;
+        }
+
+        internal static Plane QuaternionToPlane(double x, double y, double z, double q1, double q2, double q3, double q4)
+        {
+            var point = new Point3d(x, y, z);
+            var quaternion = new Quaternion(q1, q2, q3, q4);
+            return QuaternionToPlane(point, quaternion);
+        }
+
+        internal static double[] PlaneToQuaternion(Plane plane)
+        {
+            var q = Quaternion.Rotation(Plane.WorldXY, plane);
+            return new double[] { plane.OriginX, plane.OriginY, plane.OriginZ, q.A, q.B, q.C, q.D };
+        }
+        #endregion
     }
 }

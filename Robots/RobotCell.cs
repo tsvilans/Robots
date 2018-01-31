@@ -15,7 +15,7 @@ namespace Robots
     {
         public List<MechanicalGroup> MechanicalGroups { get; }
 
-        internal RobotCell(string name, Manufacturers manufacturer, List<MechanicalGroup> mechanicalGroups, IO io, Plane basePlane, Mesh environment) : base(name, manufacturer, io, basePlane, environment)
+        public RobotCell(string name, Manufacturers manufacturer, List<MechanicalGroup> mechanicalGroups, IO io, Plane basePlane, Mesh environment) : base(name, manufacturer, io, basePlane, environment)
         {
             this.MechanicalGroups = mechanicalGroups;
             this.DisplayMesh = new Mesh();

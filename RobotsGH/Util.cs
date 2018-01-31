@@ -132,7 +132,7 @@ namespace Robots.Grasshopper
             if (robotSystem == null)
             {
                 if (numbers.Count != 7) { this.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The list should be made out of 7 numbers."); return; }
-                plane = RobotCellAbb.QuaternionToPlane(numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5], numbers[6]);
+                plane = Util.QuaternionToPlane(numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5], numbers[6]);
             }
             else
             {
@@ -182,7 +182,7 @@ namespace Robots.Grasshopper
 
             if (robotSystem == null)
             {
-                numbers = RobotCellAbb.PlaneToQuaternion(plane.Value);
+                numbers = Util.PlaneToQuaternion(plane.Value);
             }
             else
             {

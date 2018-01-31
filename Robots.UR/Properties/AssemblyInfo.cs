@@ -2,21 +2,17 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-[assembly: InternalsVisibleTo("Robots.ABB")]
-[assembly: InternalsVisibleTo("Robots.Kuka")]
-[assembly: InternalsVisibleTo("Robots.Fanuc")]
-[assembly: InternalsVisibleTo("Robots.UR")]
-[assembly: InternalsVisibleTo("RobotsGH")]
+[assembly: InternalsVisibleTo("Robots")]
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Robots")]
+[assembly: AssemblyTitle("Robots.UR")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Robots")]
-[assembly: AssemblyCopyright("Copyright ©  2016")]
+[assembly: AssemblyCompany("KADK")]
+[assembly: AssemblyProduct("Robots.UR")]
+[assembly: AssemblyCopyright("Copyright © KADK 2018")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -26,7 +22,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("4b82f187-ed41-4203-a22b-97112db59b82")]
+[assembly: Guid("19c18d72-2c06-40dd-8f47-c6eac4961de4")]
 
 // Version information for an assembly consists of the following four values:
 //

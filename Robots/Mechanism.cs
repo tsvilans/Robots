@@ -126,7 +126,7 @@ namespace Robots
             double q2 = XmlConvert.ToDouble(baseElement.Attribute(XName.Get("q2")).Value);
             double q3 = XmlConvert.ToDouble(baseElement.Attribute(XName.Get("q3")).Value);
             double q4 = XmlConvert.ToDouble(baseElement.Attribute(XName.Get("q4")).Value);
-            var basePlane = RobotCellAbb.QuaternionToPlane(x, y, z, q1, q2, q3, q4);
+            var basePlane = Util.QuaternionToPlane(x, y, z, q1, q2, q3, q4);
 
             var jointElements = element.Element(XName.Get("Joints")).Descendants().ToArray();
             Joint[] joints = new Joint[jointElements.Length];

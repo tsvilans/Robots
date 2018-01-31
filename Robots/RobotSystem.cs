@@ -25,6 +25,36 @@ namespace Robots
         public Mesh DisplayMesh { get; set; }
         public IRemote Remote { get; protected set; }
 
+        #region Dynamic RobotSystem loading
+        internal static Dictionary<string, Type> RobotSystemTypes;
+        internal static void InitializeRobotSystemTypes()
+        {
+            Console.WriteLine(Util.AssemblyDirectory);
+
+            RobotSystemTypes = new Dictionary<string, Type>();
+
+            var files = System.IO.Directory.GetFiles(Util.AssemblyDirectory, "*.dll");
+            foreach (string file in files)
+            {
+                Rhino.RhinoApp.WriteLine(file);
+                var DLL = System.Reflection.Assembly.LoadFile(file);
+
+                foreach (Type type in DLL.GetExportedTypes())
+                {
+                    if (type.BaseType == typeof(RobotCell))
+                    {
+                        string name = (string)type.GetMethod("GetRobotSystemType").Invoke(null, null);
+                        RobotSystemTypes.Add(name, type);
+                        Rhino.RhinoApp.WriteLine(name);
+                    }
+                }
+            }
+
+            Rhino.RhinoApp.WriteLine($"Found {RobotSystemTypes.Keys.Count} robot systems.");
+        }
+        //internal abstract string GetRobotSystemType();
+        #endregion
+
         static RobotSystem()
         {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
@@ -109,6 +139,8 @@ namespace Robots
             //string folder = $@"{AssemblyDirectory}\robots";
             string folder = LibraryPath;
 
+            InitializeRobotSystemTypes();
+
             if (Directory.Exists(folder))
             {
                 var files = Directory.GetFiles(folder, "*.xml");
@@ -151,7 +183,8 @@ namespace Robots
         {
             var type = element.Name.LocalName;
             var name = element.Attribute(XName.Get("name")).Value;
-            var manufacturer = (Manufacturers)Enum.Parse(typeof(Manufacturers), element.Attribute(XName.Get("manufacturer")).Value);
+            //var manufacturer = (Manufacturers)Enum.Parse(typeof(Manufacturers), element.Attribute(XName.Get("manufacturer")).Value);
+            var manufacturer = element.Attribute(XName.Get("manufacturer")).Value;
             var mechanisms = new List<Mechanism>();
 
             var mechanicalGroups = new List<MechanicalGroup>();
@@ -183,6 +216,13 @@ namespace Robots
 
             if (type == "RobotCell")
             {
+                if (RobotSystemTypes.ContainsKey(manufacturer))
+                {
+                    return (RobotSystem)System.Activator.CreateInstance(RobotSystemTypes[manufacturer], new object[]{name, mechanicalGroups,
+                        io, basePlane, environment });
+                }
+
+                /*
                 switch (manufacturer)
                 {
                     case (Manufacturers.ABB):
@@ -194,6 +234,7 @@ namespace Robots
                     case (Manufacturers.FANUC):
                         return new RobotCellFanuc(name, mechanicalGroups, io, basePlane, environment);
                 }
+                */
             }
 
             return null;
