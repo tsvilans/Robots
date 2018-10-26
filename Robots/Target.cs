@@ -394,6 +394,8 @@ namespace Robots
             this.Mesh = mesh;
         }
 
+        public static string ToolFolder = $@"{Robots.Util.AssemblyDirectory}\tools";
+
 
         #region Tool loading
 
@@ -401,11 +403,10 @@ namespace Robots
         {
             var names = new List<string>();
             var elements = new List<XElement>();
-            string folder = $@"{Robots.Util.AssemblyDirectory}\robots\tools";
 
-            if (System.IO.Directory.Exists(folder))
+            if (System.IO.Directory.Exists(ToolFolder))
             {
-                var files = System.IO.Directory.GetFiles(folder, "*.xml");
+                var files = System.IO.Directory.GetFiles(ToolFolder, "*.xml");
                 foreach (var file in files)
                 {
                     var element = XElement.Load(file);
@@ -423,11 +424,10 @@ namespace Robots
         public static Tool Load(string name)
         {
             XElement element = null;
-            string folder = $@"{Robots.Util.AssemblyDirectory}\robots\tools";
 
-            if (System.IO.Directory.Exists(folder))
+            if (System.IO.Directory.Exists(ToolFolder))
             {
-                var files = System.IO.Directory.GetFiles(folder, "*.xml");
+                var files = System.IO.Directory.GetFiles(ToolFolder, "*.xml");
 
                 foreach (var file in files)
                 {
@@ -439,7 +439,6 @@ namespace Robots
             }
 
             if (element == null) throw new InvalidOperationException($" RobotTool \"{name}\" not found");
-
 
             return Create(element);
         }
@@ -481,11 +480,9 @@ namespace Robots
             var meshes = new List<Mesh>();
             Mesh mesh = new Mesh();
 
-            string folder = $@"{Util.AssemblyDirectory}\robots\tools";
-
-            if (System.IO.Directory.Exists(folder))
+            if (System.IO.Directory.Exists(ToolFolder))
             {
-                var files = System.IO.Directory.GetFiles(folder, "*.3dm");
+                var files = System.IO.Directory.GetFiles(ToolFolder, "*.3dm");
                 Rhino.DocObjects.Layer layer = null;
 
                 foreach (var file in files)

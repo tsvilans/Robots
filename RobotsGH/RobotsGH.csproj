@@ -14,6 +14,8 @@
     <FileAlignment>512</FileAlignment>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <TargetFrameworkProfile />
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -27,7 +29,7 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\..\..\..\AppData\Roaming\Grasshopper\Libraries\</OutputPath>
+    <OutputPath>..\bin\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -35,20 +37,29 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Eto, Version=2.4.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Eto.Forms.2.4.1\lib\netstandard1.0\Eto.dll</HintPath>
+    </Reference>
     <Reference Include="GH_IO">
-      <HintPath>..\..\..\..\..\Program Files\Rhino WIP\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <HintPath>..\..\..\..\..\Program Files\Common Files\McNeel\Rhinoceros\5.0\Plug-ins\Grasshopper (b45a29b1-4343-4035-989e-044e8580d9cf)\0.9.76.0\GH_IO.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="Grasshopper">
-      <HintPath>..\..\..\..\..\Program Files\Rhino WIP\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <HintPath>..\..\..\..\..\Program Files\Common Files\McNeel\Rhinoceros\5.0\Plug-ins\Grasshopper (b45a29b1-4343-4035-989e-044e8580d9cf)\0.9.76.0\Grasshopper.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="RhinoCommon">
-      <HintPath>..\..\..\..\..\Program Files\Rhino WIP\System\RhinoCommon.dll</HintPath>
+      <HintPath>..\..\..\..\..\Program Files\Rhinoceros 5.0 (64-bit)\System\RhinoCommon.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Runtime.Serialization.Primitives, Version=4.1.2.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Runtime.Serialization.Primitives.4.3.0\lib\net46\System.Runtime.Serialization.Primitives.dll</HintPath>
+    </Reference>
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.XML" />
     <Reference Include="System.Xml.Linq" />
@@ -123,8 +134,12 @@
     <ProjectReference Include="..\Robots\Robots.csproj">
       <Project>{4b82f187-ed41-4203-a22b-97112db59b82}</Project>
       <Name>Robots</Name>
-      <Private>True</Private>
+      <Private>False</Private>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -153,4 +168,11 @@ Erase "$(TargetPath)"</PostBuildEvent>
     <RunCodeAnalysis>false</RunCodeAnalysis>
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
+  <Import Project="..\packages\Eto.Forms.2.4.1\build\Eto.Forms.targets" Condition="Exists('..\packages\Eto.Forms.2.4.1\build\Eto.Forms.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Eto.Forms.2.4.1\build\Eto.Forms.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Eto.Forms.2.4.1\build\Eto.Forms.targets'))" />
+  </Target>
 </Project>

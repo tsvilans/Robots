@@ -6,8 +6,15 @@ using Rhino.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+#if ETO
+using Eto.Forms;
+using Eto.Drawing;
+#else
 using System.Windows.Forms;
 using System.Drawing;
+#endif
+
+
 
 namespace Robots.Grasshopper
 {
@@ -16,7 +23,7 @@ namespace Robots.Grasshopper
         public Kinematics() : base("Kinematics", "K", "Inverse and forward kinematics for a single target (or group of targets in a robot cell with coord", "Robots", "Components") { }
         public override GH_Exposure Exposure => GH_Exposure.quarternary;
         public override Guid ComponentGuid => new Guid("{EFDA05EB-B281-4703-9C9E-B5F98A9B2E1D}");
-        protected override Bitmap Icon => Properties.Resources.iconKinematics;
+        protected override System.Drawing.Bitmap Icon => Properties.Resources.iconKinematics;
 
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
@@ -104,7 +111,7 @@ namespace Robots.Grasshopper
 
         public override GH_Exposure Exposure => GH_Exposure.quarternary;
         public override Guid ComponentGuid => new Guid("{6CE35140-A625-4686-B8B3-B734D9A36CFC}");
-        protected override Bitmap Icon => Properties.Resources.iconSimulation;
+        protected override System.Drawing.Bitmap Icon => Properties.Resources.iconSimulation;
 
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
@@ -156,7 +163,7 @@ namespace Robots.Grasshopper
             DA.SetData(5, new GH_Program(program.Value));
             DA.SetDataList(6, errors);
 
-            if (form.Visible && form.play.Checked)
+            if (form.Visible && (bool)form.play.Checked)
             {
                 var currentTime = DateTime.Now;
                 TimeSpan delta = currentTime - lastTime;
@@ -172,7 +179,7 @@ namespace Robots.Grasshopper
         double speed = 1;
         DateTime lastTime;
 
-        protected override void AppendAdditionalComponentMenuItems(ToolStripDropDown menu)
+        protected override void AppendAdditionalComponentMenuItems(System.Windows.Forms.ToolStripDropDown menu)
         {
             Menu_AppendItem(menu, "Open controls", OpenForm, true, form.Visible);
         }
