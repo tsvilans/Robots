@@ -30,11 +30,11 @@ namespace Robots
         public override double DegreeToRadian(double degree, int i) => degree * (PI / 180);
         public override double RadianToDegree(double radian, int i) => radian * (180 / PI);
 
-        public override KinematicSolution Kinematics(Target target, double[] prevJoints = null, bool displayMeshes = false, Plane? basePlane = null) => new PositionerKinematics(this, target, prevJoints, displayMeshes, basePlane);
+        public override KinematicSolution Kinematics(Target target, double[] prevJoints = null, Plane? basePlane = null) => new PositionerKinematics(this, target, prevJoints, basePlane);
 
         class PositionerKinematics : MechanismKinematics
         {
-            internal PositionerKinematics(Positioner positioner, Target target, double[] prevJoints, bool displayMeshes, Plane? basePlane) : base(positioner, target, prevJoints, displayMeshes, basePlane) { }
+            internal PositionerKinematics(Positioner positioner, Target target, double[] prevJoints, Plane? basePlane) : base(positioner, target, prevJoints, basePlane) { }
 
             protected override void SetJoints(Target target, double[] prevJoints)
             {
@@ -48,7 +48,6 @@ namespace Robots
                 }
                 if (prevJoints != null)
                     Joints = JointTarget.GetAbsoluteJoints(Joints, prevJoints);
-
             }
 
             protected override void SetPlanes(Target target)
@@ -60,6 +59,59 @@ namespace Robots
                     Planes[i + 1] = mechanism.Joints[i].Plane;
                     for (int j = i; j >= 0; j--)
                         Planes[i + 1].Rotate(Joints[j], mechanism.Joints[j].Plane.Normal, mechanism.Joints[j].Plane.Origin);
+                }
+            }
+        }
+    }
+
+    public class Custom : Mechanism
+    {
+        internal Custom(string model, Manufacturers manufacturer, double payload, Plane basePlane, Mesh baseMesh, Joint[] joints, bool movesRobot)
+            : base(model, manufacturer, payload, basePlane, baseMesh, joints, movesRobot) { }
+
+        protected override void SetStartPlanes()
+        {
+            var plane = Plane.WorldXY;
+            foreach (var joint in Joints)
+            {
+                joint.Plane = plane;
+            }
+        }
+
+        public override double DegreeToRadian(double degree, int i) => degree;
+        public override double RadianToDegree(double radian, int i) => radian;
+
+        public override KinematicSolution Kinematics(Target target, double[] prevJoints = null, Plane? basePlane = null)
+            => new CustomKinematics(this, target, prevJoints, basePlane);
+
+        class CustomKinematics : MechanismKinematics
+        {
+            internal CustomKinematics(Custom custom, Target target, double[] prevJoints, Plane? basePlane)
+                : base(custom, target, prevJoints, basePlane) { }
+
+            protected override void SetJoints(Target target, double[] prevJoints)
+            {
+                for (int i = 0; i < mechanism.Joints.Length; i++)
+                {
+                    int externalNum = mechanism.Joints[i].Number - 6;
+
+                    if (target.External.Length < externalNum + 1)
+                    {
+                        Errors.Add($"Custom external axis not configured on this target.");
+                    }
+                    else
+                    {
+                        double value = target.External[externalNum];
+                        Joints[i] = prevJoints == null ? value : value;
+                    }
+                }
+            }
+
+            protected override void SetPlanes(Target target)
+            {
+                for (int i = 0; i < Planes.Length; i++)
+                {
+                    Planes[i] = Plane.WorldXY;
                 }
             }
         }
@@ -91,18 +143,18 @@ namespace Robots
         public override double DegreeToRadian(double degree, int i) => degree;
         public override double RadianToDegree(double radian, int i) => radian;
 
-        public override KinematicSolution Kinematics(Target target, double[] prevJoints = null, bool displayMeshes = false, Plane? basePlane = null) => new TrackKinematics(this, target, displayMeshes, basePlane);
+        public override KinematicSolution Kinematics(Target target, double[] prevJoints = null, Plane? basePlane = null) => new TrackKinematics(this, target, basePlane);
 
         class TrackKinematics : MechanismKinematics
         {
-            internal TrackKinematics(Track track, Target target, bool displayMeshes, Plane? basePlane) : base(track, target, null, displayMeshes, basePlane) { }
+            internal TrackKinematics(Track track, Target target, Plane? basePlane) : base(track, target, null, basePlane) { }
 
             protected override void SetJoints(Target target, double[] prevJoints)
             {
                 for (int i = 0; i < mechanism.Joints.Length; i++)
                 {
                     int externalNum = mechanism.Joints[i].Number - 6;
-                    if (target.External.Length < externalNum+1) Errors.Add($"Track external axis not configured on this target.");
+                    if (target.External.Length < externalNum + 1) Errors.Add($"Track external axis not configured on this target.");
                     else Joints[i] = target.External[externalNum];
                 }
             }

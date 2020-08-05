@@ -11,8 +11,8 @@ namespace Robots
     public class RobotCellUR : RobotSystem
     {
         public RobotUR Robot { get; }
-      //  public RemoteConnection Remote { get; } = new RemoteConnection();
-       // public URRealTime URRealTime { get; set; }
+        //  public RemoteConnection Remote { get; } = new RemoteConnection();
+        // public URRealTime URRealTime { get; set; }
 
         internal RobotCellUR(string name, RobotArm robot, IO io, Plane basePlane, Mesh environment) : base(name, Manufacturers.UR, io, basePlane, environment)
         {
@@ -51,7 +51,7 @@ namespace Robots
             {
                 // singularity found
                 // first check for identity matrix which must have +1 for all terms
-                //  in leading diagonaland zero in other terms
+                //  in leading diagonal and zero in other terms
                 if ((Abs(m[0][1] + m[1][0]) < epsilon2)
                   && (Abs(m[0][2] + m[2][0]) < epsilon2)
                   && (Abs(m[1][2] + m[2][1]) < epsilon2)
@@ -186,20 +186,20 @@ namespace Robots
             return degree.ToRadians();
         }
 
-        public KinematicSolution Kinematics(Target target, double[] prevJoints = null, bool displayMeshes = false)
+        public KinematicSolution Kinematics(Target target, double[] prevJoints = null)
         {
-            var kinematics = Kinematics(new Target[] { target }, new double[][] { prevJoints }, displayMeshes);
+            var kinematics = Kinematics(new Target[] { target }, new double[][] { prevJoints });
             return kinematics[0];
         }
 
-        public override List<KinematicSolution> Kinematics(IEnumerable<Target> targets, IEnumerable<double[]> prevJoints = null, bool displayMeshes = false)
+        public override List<KinematicSolution> Kinematics(IEnumerable<Target> targets, IEnumerable<double[]> prevJoints = null)
         {
             var target = targets.First();
             var prevJoint = prevJoints?.First();
             var kinematics = new List<KinematicSolution>();
-            var kinematic = Robot.Kinematics(target, prevJoint, displayMeshes, this.BasePlane);
+            var kinematic = Robot.Kinematics(target, prevJoint, this.BasePlane);
             var planes = kinematic.Planes.ToList();
-            var meshes = (displayMeshes) ? kinematic.Meshes.ToList() : null;
+
 
             // Tool
             if (target.Tool != null)
@@ -211,19 +211,6 @@ namespace Robots
             else
                 planes.Add(planes[planes.Count - 1]);
 
-            if (displayMeshes)
-            {
-                if (target.Tool?.Mesh != null)
-                {
-                    Mesh toolMesh = target.Tool.Mesh.DuplicateMesh();
-                    toolMesh.Transform(Transform.PlaneToPlane(target.Tool.Tcp, planes[planes.Count - 1]));
-                    meshes.Add(toolMesh);
-                }
-                else
-                    meshes.Add(null);
-
-                kinematic.Meshes = meshes.ToArray();
-            }
             kinematic.Planes = planes.ToArray();
             kinematics.Add(kinematic);
             return kinematics;
@@ -246,12 +233,10 @@ namespace Robots
             if (!Directory.Exists(folder)) throw new DirectoryNotFoundException($" Folder \"{folder}\" not found");
             if (program.Code == null) throw new NullReferenceException(" Program code not generated");
 
-            string file = $@"{folder}\{program.Name}.URS";
-            var joinedCode = string.Join("\r\n", program.Code[0]);
+            string file = Path.Combine(folder, $"{program.Name}.URS");
+            var joinedCode = string.Join("\r\n", program.Code[0].SelectMany(c => c));
             File.WriteAllText(file, joinedCode);
         }
-
-
 
         class URScriptPostProcessor
         {
@@ -292,26 +277,26 @@ namespace Robots
                     cog.Transform(Transform.PlaneToPlane(Plane.WorldXY, originPlane));
                     cog /= 1000;
 
-                    code.Add(indent + $"{tool.Name}Tcp = p[{axisAngle[0]:0.00000}, {axisAngle[1]:0.00000}, {axisAngle[2]:0.00000}, {axisAngle[3]:0.0000}, {axisAngle[4]:0.0000}, {axisAngle[5]:0.0000}]");
-                    code.Add(indent + $"{tool.Name}Weight = {tool.Weight:0.000}");
-                    code.Add(indent + $"{tool.Name}Cog = [{cog.X:0.00000}, {cog.Y:0.00000}, {cog.Z:0.00000}]");
+                    code.Add(indent + $"{tool.Name}Tcp = p[{axisAngle[0]:0.#####}, {axisAngle[1]:0.#####}, {axisAngle[2]:0.#####}, {axisAngle[3]:0.#####}, {axisAngle[4]:0.#####}, {axisAngle[5]:0.#####}]");
+                    code.Add(indent + $"{tool.Name}Weight = {tool.Weight:0.###}");
+                    code.Add(indent + $"{tool.Name}Cog = [{cog.X:0.#####}, {cog.Y:0.#####}, {cog.Z:0.#####}]");
                 }
 
                 foreach (var speed in program.Attributes.OfType<Speed>())
                 {
                     double linearSpeed = speed.TranslationSpeed / 1000;
-                    code.Add(indent + $"{speed.Name} = {linearSpeed:0.00000}");
+                    code.Add(indent + $"{speed.Name} = {linearSpeed:0.#####}");
                 }
 
                 foreach (var zone in program.Attributes.OfType<Zone>())
                 {
                     double zoneDistance = zone.Distance / 1000;
-                    code.Add(indent + $"{zone.Name} = {zoneDistance:0.00000}");
+                    code.Add(indent + $"{zone.Name} = {zoneDistance:0.#####}");
                 }
 
                 foreach (var command in program.Attributes.OfType<Command>())
                 {
-                    string declaration = command.Declaration(cell);
+                    string declaration = command.Declaration(program);
                     if (declaration != null && declaration.Length > 0)
                     {
                         declaration = indent + declaration;
@@ -323,7 +308,7 @@ namespace Robots
                 // Init commands
 
                 foreach (var command in program.InitCommands)
-                    code.Add(command.Code(cell, Target.Default));
+                    code.Add(command.Code(program, Target.Default));
 
                 Tool currentTool = null;
 
@@ -341,7 +326,7 @@ namespace Robots
                     }
 
                     string moveText = null;
-                    string zoneDistance = $"{target.Zone.Name:0.00000}";
+                    string zoneDistance = $"{target.Zone.Name:0.#####}";
                     // double zoneDistance = target.Zone.Distance / 1000;
 
 
@@ -355,11 +340,11 @@ namespace Robots
 
                         string speed = null;
                         if (target.Speed.Time == 0)
-                            speed = $"v={axisSpeed: 0.000}";
+                            speed = $"v={axisSpeed: 0.###}";
                         else
-                            speed = $"t={target.Speed.Time: 0.000}";
+                            speed = $"t={target.Speed.Time: 0.###}";
 
-                        moveText = $"  movej([{joints[0]:0.0000}, {joints[1]:0.0000}, {joints[2]:0.0000}, {joints[3]:0.0000}, {joints[4]:0.0000}, {joints[5]:0.0000}], a={axisAccel:0.0000}, {speed}, r={zoneDistance})";
+                        moveText = $"  movej([{joints[0]:0.####}, {joints[1]:0.####}, {joints[2]:0.####}, {joints[3]:0.####}, {joints[4]:0.####}, {joints[5]:0.####}], a={axisAccel:0.####}, {speed}, r={zoneDistance})";
                     }
                     else
                     {
@@ -371,7 +356,7 @@ namespace Robots
 
                         switch (cartesian.Motion)
                         {
-                            case Target.Motions.Joint:
+                            case Motions.Joint:
                                 {
                                     double maxAxisSpeed = robot.Joints.Min(x => x.MaxSpeed);
                                     double percentage = (cellTarget.DeltaTime > 0) ? cellTarget.MinTime / cellTarget.DeltaTime : 0.1;
@@ -380,15 +365,15 @@ namespace Robots
 
                                     string speed = null;
                                     if (target.Speed.Time == 0)
-                                        speed = $"v={axisSpeed: 0.000}";
+                                        speed = $"v={axisSpeed: 0.###}";
                                     else
-                                        speed = $"t={target.Speed.Time: 0.000}";
+                                        speed = $"t={target.Speed.Time: 0.###}";
 
-                                    moveText = $"  movej(p[{axisAngle[0]:0.00000}, {axisAngle[1]:0.00000}, {axisAngle[2]:0.00000}, {axisAngle[3]:0.0000}, {axisAngle[4]:0.0000}, {axisAngle[5]:0.0000}],a={axisAccel:0.00000},{speed},r={zoneDistance})";
+                                    moveText = $"  movej(p[{axisAngle[0]:0.#####}, {axisAngle[1]:0.#####}, {axisAngle[2]:0.#####}, {axisAngle[3]:0.#####}, {axisAngle[4]:0.#####}, {axisAngle[5]:0.#####}],a={axisAccel:0.#####},{speed},r={zoneDistance})";
                                     break;
                                 }
 
-                            case Target.Motions.Linear:
+                            case Motions.Linear:
                                 {
                                     double linearSpeed = target.Speed.TranslationSpeed / 1000;
                                     double linearAccel = target.Speed.TranslationAccel / 1000;
@@ -400,19 +385,25 @@ namespace Robots
                                     else
                                         speed = $"t={target.Speed.Time: 0.000}";
 
-                                    moveText = $"  movel(p[{axisAngle[0]:0.00000}, {axisAngle[1]:0.00000}, {axisAngle[2]:0.00000}, {axisAngle[3]:0.0000}, {axisAngle[4]:0.0000}, {axisAngle[5]:0.0000}],a={linearAccel:0.00000},{speed},r={zoneDistance})";
+                                    moveText = $"  movel(p[{axisAngle[0]:0.#####}, {axisAngle[1]:0.#####}, {axisAngle[2]:0.#####}, {axisAngle[3]:0.#####}, {axisAngle[4]:0.#####}, {axisAngle[5]:0.#####}],a={linearAccel:0.#####},{speed},r={zoneDistance})";
                                     break;
                                 }
                         }
                     }
 
+                    foreach (var command in programTarget.Commands.Where(c => c.RunBefore))
+                    {
+                        string commands = command.Code(program, target);
+                        commands = indent + commands;
+                        code.Add(commands);
+                    }
+
                     code.Add(moveText);
 
-                    foreach (var command in programTarget.Commands)
+                    foreach (var command in programTarget.Commands.Where(c => !c.RunBefore))
                     {
-                        string commands = command.Code(cell, target);
+                        string commands = command.Code(program, target);
                         commands = indent + commands;
-                        // commands = indent + commands.Replace("\n", "\n" + indent);
                         code.Add(commands);
                     }
                 }

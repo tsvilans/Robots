@@ -1,13 +1,11 @@
-﻿using System;
-using System.Linq;
-using System.IO;
+﻿using Rhino.Geometry;
+using System;
 using System.Collections.Generic;
-using static System.Math;
-
-using Rhino.Geometry;
-using static Robots.Util;
+using System.IO;
+using System.Linq;
 using static Rhino.RhinoMath;
-
+using static Robots.Util;
+using static System.Math;
 
 namespace Robots
 {
@@ -58,17 +56,15 @@ namespace Robots
                 c = 0;
             }
 
-            var euler = new double[] { a, b, c }.Select(x => -x.ToDegrees()).ToArray();
-            return new double[] { plane.OriginX, plane.OriginY, plane.OriginZ, euler[0], euler[1], euler[2] };
+            return new double[] { plane.OriginX, plane.OriginY, plane.OriginZ, -a.ToDegrees(), -b.ToDegrees(), -c.ToDegrees() };
         }
 
         public override double[] PlaneToNumbers(Plane plane) => PlaneToEuler(plane);
         public override Plane NumbersToPlane(double[] numbers) => EulerToPlane(numbers[0], numbers[1], numbers[2], numbers[3], numbers[4], numbers[5]);
 
-
         public override Plane CartesianLerp(Plane a, Plane b, double t, double min, double max)
         {
-           // return base.CartesianLerp(a, b, t, min, max);
+            // return base.CartesianLerp(a, b, t, min, max);
 
             t = (t - min) / (max - min);
             if (double.IsNaN(t)) t = 0;
@@ -95,25 +91,25 @@ namespace Robots
         {
             if (!Directory.Exists(folder)) throw new DirectoryNotFoundException($" Folder \"{folder}\" not found");
             if (program.Code == null) throw new NullReferenceException(" Program code not generated");
-            Directory.CreateDirectory($@"{folder}\{program.Name}");
+            Directory.CreateDirectory(Path.Combine(folder, program.Name));
 
             for (int i = 0; i < program.Code.Count; i++)
             {
                 string group = MechanicalGroups[i].Name;
                 {
-                    string file = $@"{folder}\{program.Name}\{program.Name}_{group}.SRC";
+                    string file = Path.Combine(folder, program.Name, $"{program.Name}_{group}.SRC");
                     var joinedCode = string.Join("\r\n", program.Code[i][0]);
                     File.WriteAllText(file, joinedCode);
                 }
                 {
-                    string file = $@"{folder}\{program.Name}\{program.Name}_{group}.DAT";
+                    string file = Path.Combine(folder, program.Name, $"{program.Name}_{group}.DAT");
                     var joinedCode = string.Join("\r\n", program.Code[i][1]);
                     File.WriteAllText(file, joinedCode);
                 }
                 for (int j = 2; j < program.Code[i].Count; j++)
                 {
                     int index = j - 2;
-                    string file = $@"{folder}\{program.Name}\{program.Name}_{group}_{index:000}.SRC";
+                    string file = Path.Combine(folder, program.Name, $"{program.Name}_{group}_{index:000}.SRC");
                     var joinedCode = string.Join("\r\n", program.Code[i][j]);
                     File.WriteAllText(file, joinedCode);
                 }
@@ -122,8 +118,8 @@ namespace Robots
 
         class KRLPostProcessor
         {
-            RobotCellKuka cell;
-            Program program;
+            readonly RobotCellKuka cell;
+            readonly Program program;
             internal List<List<List<string>>> Code { get; }
 
             internal KRLPostProcessor(RobotCellKuka robotCell, Program program)
@@ -164,14 +160,14 @@ DEFDAT {program.Name}_{groupName} PUBLIC
                 foreach (var frame in program.Attributes.OfType<Frame>()) code.Add(Frame(frame));
 
                 foreach (var speed in program.Attributes.OfType<Speed>())
-                    code.Add($"DECL GLOBAL REAL {speed.Name} = {speed.TranslationSpeed / 1000:0.00000}");
+                    code.Add($"DECL GLOBAL REAL {speed.Name} = {speed.TranslationSpeed / 1000:0.#####}");
 
                 foreach (var zone in program.Attributes.OfType<Zone>())
-                    code.Add($"DECL GLOBAL REAL {zone.Name} = {zone.Distance:0.000}");
+                    code.Add($"DECL GLOBAL REAL {zone.Name} = {zone.Distance:0.###}");
 
                 foreach (var command in program.Attributes.OfType<Command>())
                 {
-                    string declaration = command.Declaration(cell);
+                    string declaration = command.Declaration(program);
                     if (declaration != null) code.Add(declaration);
                 }
 
@@ -196,12 +192,11 @@ $APO.CPTP=100
 
                 // Init commands
                 foreach (var command in program.InitCommands)
-                    code.Add(command.Code(cell, Target.Default));
-
+                    code.Add(command.Code(program, Target.Default));
 
                 for (int i = 0; i < program.MultiFileIndices.Count; i++)
                 {
-                    code.Add($@"{program.Name}_{groupName}_{i:000}()");
+                    code.Add($"{program.Name}_{groupName}_{i:000}()");
                 }
 
                 code.Add("END");
@@ -245,8 +240,8 @@ DEF {program.Name}_{groupName}_{file:000}()
                         if (target.Frame.IsCoupled)
                         {
                             int mech = target.Frame.CoupledMechanism + 2;
-                            code.Add($@"$BASE = EK(MACHINE_DEF[{mech}].ROOT, MACHINE_DEF[{mech}].MECH_TYPE, {target.Frame.Name})");
-                            code.Add($@"$ACT_EX_AX = 2");
+                            code.Add($"$BASE = EK(MACHINE_DEF[{mech}].ROOT, MACHINE_DEF[{mech}].MECH_TYPE, {target.Frame.Name})");
+                            code.Add($"$ACT_EX_AX = 2");
                         }
                         else
                         {
@@ -262,7 +257,6 @@ DEF {program.Name}_{groupName}_{file:000}()
                         currentZone = target.Zone;
                     }
 
-
                     if (programTarget.Index > 0)
                     {
                         if (programTarget.LeadingJoint > 5)
@@ -277,7 +271,7 @@ DEF {program.Name}_{groupName}_{file:000}()
                                 {
                                     double rotation = target.Speed.RotationSpeed.ToDegrees();
                                     //  code.Add($"$VEL={{CP {target.Speed.Name}, ORI1 {rotation:0.000}, ORI2 {rotation:0.000}}}");
-                                    code.Add($"$VEL.CP = {target.Speed.Name}\r\n$VEL.ORI1 = {rotation:0.000}\r\n$VEL.ORI2 = {rotation:0.000}");
+                                    code.Add($"$VEL.CP = {target.Speed.Name}\r\n$VEL.ORI1 = {rotation:0.###}\r\n$VEL.ORI2 = {rotation:0.####}");
                                     currentSpeed = target.Speed;
                                 }
                             }
@@ -288,7 +282,7 @@ DEF {program.Name}_{groupName}_{file:000}()
 
                                 if (Abs(currentPercentSpeed - percentSpeed) > UnitTol)
                                 {
-                                    code.Add($"BAS(#VEL_PTP, 100)");
+                                    code.Add("BAS(#VEL_PTP, 100)");
                                     if (cellTarget.DeltaTime > UnitTol) code.Add($"$VEL_AXIS[{programTarget.LeadingJoint + 1}] = {percentSpeed * 100:0.000}");
                                     currentPercentSpeed = percentSpeed;
                                 }
@@ -305,7 +299,7 @@ DEF {program.Name}_{groupName}_{file:000}()
                     for (int i = 0; i < target.External.Length; i++)
                     {
                         int num = i + 1;
-                        external += $", E{num} {values[i]:0.000}";
+                        external += $", E{num} {values[i]:0.####}";
                     }
 
                     // motion command
@@ -317,7 +311,7 @@ DEF {program.Name}_{groupName}_{file:000}()
                         var jointTarget = target as JointTarget;
                         double[] jointDegrees = jointTarget.Joints.Select((x, i) => cell.MechanicalGroups[group].Robot.RadianToDegree(x, i)).ToArray();
 
-                        moveText = $"PTP {{A1 {jointDegrees[0]:0.000},A2 {jointDegrees[1]:0.000},A3 {jointDegrees[2]:0.000},A4 {jointDegrees[3]:0.000},A5 {jointDegrees[4]:0.000},A6 {jointDegrees[5]:0.000}{external}}}";
+                        moveText = $"PTP {{A1 {jointDegrees[0]:0.####},A2 {jointDegrees[1]:0.####},A3 {jointDegrees[2]:0.####},A4 {jointDegrees[3]:0.####},A5 {jointDegrees[4]:0.####},A6 {jointDegrees[5]:0.####}{external}}}";
                         if (target.Zone.IsFlyBy) moveText += " C_PTP";
                     }
                     else
@@ -328,7 +322,7 @@ DEF {program.Name}_{groupName}_{file:000}()
 
                         switch (cartesian.Motion)
                         {
-                            case Target.Motions.Joint:
+                            case Motions.Joint:
                                 {
                                     string bits = string.Empty;
                                     //  if (target.ChangesConfiguration)
@@ -338,10 +332,10 @@ DEF {program.Name}_{groupName}_{file:000}()
                                         for (int i = 0; i < 6; i++) if (jointDegrees[i] < 0) turnNum += (int)Pow(2, i);
 
                                         var configuration = programTarget.Kinematics.Configuration;
-                                        bool shoulder = configuration.HasFlag(Target.RobotConfigurations.Shoulder);
-                                        bool elbow = configuration.HasFlag(Target.RobotConfigurations.Elbow);
+                                        bool shoulder = configuration.HasFlag(RobotConfigurations.Shoulder);
+                                        bool elbow = configuration.HasFlag(RobotConfigurations.Elbow);
                                         elbow = !elbow;
-                                        bool wrist = configuration.HasFlag(Target.RobotConfigurations.Wrist);
+                                        bool wrist = configuration.HasFlag(RobotConfigurations.Wrist);
 
                                         int configNum = 0;
                                         if (shoulder) configNum += 1;
@@ -350,26 +344,30 @@ DEF {program.Name}_{groupName}_{file:000}()
 
                                         string status = Convert.ToString(configNum, 2);
                                         string turn = Convert.ToString(turnNum, 2);
-                                        bits = $@", S'B{status:000}',T'B{turn:000000}'";
+                                        bits = $", S'B{status:000}',T'B{turn:000000}'";
                                     }
 
-                                    moveText = $"PTP {{X {euler[0]:0.00},Y {euler[1]:0.00},Z {euler[2]:0.00},A {euler[3]:0.000},B {euler[4]:0.000},C {euler[5]:0.000}{external}{bits}}}";
+                                    moveText = $"PTP {{X {euler[0]:0.###},Y {euler[1]:0.###},Z {euler[2]:0.###},A {euler[3]:0.####},B {euler[4]:0.####},C {euler[5]:0.####}{external}{bits}}}";
                                     if (target.Zone.IsFlyBy) moveText += " C_PTP";
                                     break;
                                 }
 
-                            case Target.Motions.Linear:
+                            case Motions.Linear:
                                 {
-                                    moveText = $"LIN {{X {euler[0]:0.00},Y {euler[1]:0.00},Z {euler[2]:0.00},A {euler[3]:0.000},B {euler[4]:0.000},C {euler[5]:0.000}{external}}}";
+                                    moveText = $"LIN {{X {euler[0]:0.###},Y {euler[1]:0.###},Z {euler[2]:0.###},A {euler[3]:0.####},B {euler[4]:0.####},C {euler[5]:0.####}{external}}}";
                                     if (target.Zone.IsFlyBy) moveText += " C_DIS";
                                     break;
                                 }
                         }
                     }
+
+                    foreach (var command in programTarget.Commands.Where(c => c.RunBefore))
+                        code.Add(command.Code(program, target));
+
                     code.Add(moveText);
 
-                    foreach (var command in programTarget.Commands)
-                        code.Add(command.Code(cell, target));
+                    foreach (var command in programTarget.Commands.Where(c => !c.RunBefore))
+                        code.Add(command.Code(program, target));
                 }
 
                 code.Add("END");
@@ -390,7 +388,7 @@ DEF {program.Name}_{groupName}_{file:000}()
                     if (joint is RevoluteJoint) percentSpeed = target.Target.Speed.RotationExternal / joint.MaxSpeed;
                     percentSpeed = Clamp(percentSpeed, 0.0, 1.0);
                     externalSpeedCode += $"BAS(#VEL_PTP, 100)" + "\r\n";
-                    externalSpeedCode += $"$VEL_EXTAX[{target.LeadingJoint + 1 - 6}] = {percentSpeed * 100:0.000}";
+                    externalSpeedCode += $"$VEL_EXTAX[{target.LeadingJoint + 1 - 6}] = {percentSpeed * 100:0.###}";
                     //     if (i < externalJointsCount - 1) externalSpeedCode += "\r\n";
                 }
 
@@ -402,14 +400,14 @@ DEF {program.Name}_{groupName}_{file:000}()
                 string toolTxt = $"$TOOL={tool.Name}";
                 string load = $"$LOAD.M={tool.Weight}";
                 Point3d centroid = tool.Centroid;
-                string centroidTxt = $"$LOAD.CM={{X {centroid.X:0.000},Y {centroid.Y:0.000},Z {centroid.Z:0.000},A 0,B 0,C 0}}";
+                string centroidTxt = $"$LOAD.CM={{X {centroid.X:0.###},Y {centroid.Y:0.###},Z {centroid.Z:0.###},A 0,B 0,C 0}}";
                 return $"{toolTxt}\r\n{load}\r\n{centroidTxt}";
             }
 
             string Tool(Tool tool)
             {
                 double[] euler = PlaneToEuler(tool.Tcp);
-                return $"DECL GLOBAL FRAME {tool.Name}={{FRAME: X {euler[0]:0.000},Y {euler[1]:0.000},Z {euler[2]:0.000},A {euler[3]:0.000},B {euler[4]:0.000},C {euler[5]:0.000}}}";
+                return $"DECL GLOBAL FRAME {tool.Name}={{FRAME: X {euler[0]:0.###},Y {euler[1]:0.###},Z {euler[2]:0.###},A {euler[3]:0.####},B {euler[4]:0.####},C {euler[5]:0.####}}}";
             }
 
             string Frame(Frame frame)
@@ -418,7 +416,7 @@ DEF {program.Name}_{groupName}_{file:000}()
                 plane.Transform(Transform.PlaneToPlane(cell.BasePlane, Plane.WorldXY));
 
                 double[] euler = PlaneToEuler(plane);
-                return $"DECL GLOBAL FRAME {frame.Name}={{FRAME: X {euler[0]:0.000},Y {euler[1]:0.000},Z {euler[2]:0.000},A {euler[3]:0.000},B {euler[4]:0.000},C {euler[5]:0.000}}}";
+                return $"DECL GLOBAL FRAME {frame.Name}={{FRAME: X {euler[0]:0.###},Y {euler[1]:0.###},Z {euler[2]:0.###},A {euler[3]:0.####},B {euler[4]:0.####},C {euler[5]:0.####}}}";
             }
         }
     }

@@ -5,12 +5,32 @@ using Rhino.Geometry;
 
 namespace Robots.Grasshopper
 {
+    public class ToolpathParameter : GH_PersistentParam<GH_Toolpath>
+    {
+        public ToolpathParameter() : base("Toolpath", "Toolpath", "This is a robot toolpath.", "Robots", "Parameters") { }
+        public override GH_Exposure Exposure => GH_Exposure.tertiary;
+        protected override System.Drawing.Bitmap Icon => Properties.Resources.iconProgramParam;
+        public override Guid ComponentGuid => new Guid("{715AEDCE-14E8-400B-A226-9806FC3CB7B3}");
+
+        protected override GH_GetterResult Prompt_Singular(ref GH_Toolpath value)
+        {
+            value = new GH_Toolpath();
+            return GH_GetterResult.success;
+        }
+
+        protected override GH_GetterResult Prompt_Plural(ref List<GH_Toolpath> values)
+        {
+            values = new List<GH_Toolpath>();
+            return GH_GetterResult.success;
+        }
+    }
+
     public class ProgramParameter : GH_PersistentParam<GH_Program>
     {
         public ProgramParameter() : base("Program parameter", "Program", "This is a robot program", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.tertiary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconProgramParam;
-        public override System.Guid ComponentGuid => new Guid("{9C4F1BB6-5FA2-44DA-B7EA-421AF31DA054}");
+        public override Guid ComponentGuid => new Guid("{9C4F1BB6-5FA2-44DA-B7EA-421AF31DA054}");
         protected override GH_GetterResult Prompt_Singular(ref GH_Program value)
         {
             value = new GH_Program();
@@ -32,7 +52,7 @@ namespace Robots.Grasshopper
         public TargetParameter() : base("Target parameter", "Target", "This is a robot target", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.secondary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconTargetParam;
-        public override System.Guid ComponentGuid => new Guid("{BEB590A9-905E-42ED-AB08-3E999EA94553}");
+        public override Guid ComponentGuid => new Guid("{BEB590A9-905E-42ED-AB08-3E999EA94553}");
         protected override GH_GetterResult Prompt_Singular(ref GH_Target value)
         {
             value = new GH_Target();
@@ -50,7 +70,7 @@ namespace Robots.Grasshopper
         public ToolParameter() : base("Tool parameter", "Tool", "This is a robot tool or end effector", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.secondary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconToolParam;
-        public override System.Guid ComponentGuid => new Guid("{073A02A6-2166-4387-9482-2EE3282E9209}");
+        public override Guid ComponentGuid => new Guid("{073A02A6-2166-4387-9482-2EE3282E9209}");
         protected override GH_GetterResult Prompt_Singular(ref GH_Tool value)
         {
             value = new GH_Tool();
@@ -68,7 +88,7 @@ namespace Robots.Grasshopper
         public SpeedParameter() : base("Speed parameter", "Speed", "This is a robot speed", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.secondary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconSpeedParam;
-        public override System.Guid ComponentGuid => new Guid("{0B329813-13A0-48C4-B89A-65F289A4FF28}");
+        public override Guid ComponentGuid => new Guid("{0B329813-13A0-48C4-B89A-65F289A4FF28}");
         protected override GH_GetterResult Prompt_Singular(ref GH_Speed value)
         {
             value = new GH_Speed();
@@ -86,7 +106,7 @@ namespace Robots.Grasshopper
         public ZoneParameter() : base("Zone parameter", "Zone", "This is a robot approximation zone", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.secondary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconZoneParam;
-        public override System.Guid ComponentGuid => new Guid("{458855D3-F671-4A50-BDA1-6AD3B7A5EC70}");
+        public override Guid ComponentGuid => new Guid("{458855D3-F671-4A50-BDA1-6AD3B7A5EC70}");
         protected override GH_GetterResult Prompt_Singular(ref GH_Zone value)
         {
             value = new GH_Zone();
@@ -104,7 +124,7 @@ namespace Robots.Grasshopper
         public FrameParameter() : base("Frame parameter", "Frame", "This is a robot base frame", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.secondary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconFrameParam;
-        public override System.Guid ComponentGuid => new Guid("{6A012ECB-D161-4F93-BB60-D03391DF1A7C}");
+        public override Guid ComponentGuid => new Guid("{6A012ECB-D161-4F93-BB60-D03391DF1A7C}");
         protected override GH_GetterResult Prompt_Singular(ref GH_Frame value)
         {
             value = new GH_Frame();
@@ -122,7 +142,7 @@ namespace Robots.Grasshopper
         public CommandParameter() : base("Command parameter", "Command", "This is a robot command", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.secondary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconCommandParam;
-        public override System.Guid ComponentGuid => new Guid("{F5865990-90F3-4736-9AFF-4DD9ECEDA799}");
+        public override Guid ComponentGuid => new Guid("{F5865990-90F3-4736-9AFF-4DD9ECEDA799}");
 
         protected override GH_GetterResult Prompt_Singular(ref GH_Command value)
         {
@@ -141,7 +161,7 @@ namespace Robots.Grasshopper
         public RobotSystemParameter() : base("RobotSystem parameter", "RobotSystem", "This is a robot RobotSystem", "Robots", "Parameters") { }
         public override GH_Exposure Exposure => GH_Exposure.primary;
         protected override System.Drawing.Bitmap Icon => Properties.Resources.iconRobotParam;
-        public override System.Guid ComponentGuid => new Guid("{3DBDF573-248C-44B5-8D46-184657A56BCB}");
+        public override Guid ComponentGuid => new Guid("{3DBDF573-248C-44B5-8D46-184657A56BCB}");
 
         protected override GH_GetterResult Prompt_Singular(ref GH_RobotSystem value)
         {
@@ -159,6 +179,5 @@ namespace Robots.Grasshopper
         public BoundingBox ClippingBox => base.Preview_ComputeClippingBox();
         public void DrawViewportWires(IGH_PreviewArgs args) => base.Preview_DrawMeshes(args);
         public void DrawViewportMeshes(IGH_PreviewArgs args) => base.Preview_DrawMeshes(args);
-
     }
 }

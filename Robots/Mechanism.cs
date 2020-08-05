@@ -15,13 +15,13 @@ namespace Robots
     {
         readonly string model;
         public Manufacturers Manufacturer { get; protected set; }
-        public string Model => $"{Manufacturer.ToString()}.{model}";
+        public string Model => $"{Manufacturer}.{model}";
         public double Payload { get; }
-        internal Plane BasePlane { get; set; }
-        internal Mesh BaseMesh { get; }
+        public Plane BasePlane { get; set; }
+        public Mesh BaseMesh { get; }
         public Joint[] Joints { get; }
         public bool MovesRobot { get; }
-        public Mesh DisplayMesh { get; private set; }
+        public Mesh DisplayMesh { get; }
 
         internal Mechanism(string model, Manufacturers manufacturer, double payload, Plane basePlane, Mesh baseMesh, IEnumerable<Joint> joints, bool movesRobot)
         {
@@ -70,18 +70,16 @@ namespace Robots
             }
             */
 
-            // string folder = $@"{AssemblyDirectory}\robots";
             string folder = LibraryPath;
 
             if (Directory.Exists(folder))
             {
                 var files = Directory.GetFiles(folder, "*.3dm");
-                Rhino.DocObjects.Layer layer = null;
 
                 foreach (var file in files)
                 {
-                    Rhino.FileIO.File3dm geometry = Rhino.FileIO.File3dm.Read($@"{file}");
-                    layer = geometry.Layers.FirstOrDefault(x => x.Name == $"{model}");
+                    Rhino.FileIO.File3dm geometry = Rhino.FileIO.File3dm.Read(file);
+                    var layer = geometry.AllLayers.FirstOrDefault(x => x.Name == model);
 
                     if (layer != null)
                     {
@@ -89,25 +87,29 @@ namespace Robots
                         while (true)
                         {
                             string name = $"{i++}";
-                            var jointLayer = geometry.Layers.FirstOrDefault(x => (x.Name == name) && (x.ParentLayerId == layer.Id));
+                            var jointLayer = geometry.AllLayers.FirstOrDefault(x => (x.Name == name) && (x.ParentLayerId == layer.Id));
                             if (jointLayer == null) break;
-                            meshes.Add(geometry.Objects.First(x => x.Attributes.LayerIndex == jointLayer.LayerIndex).Geometry as Mesh);
+                            var mesh = geometry.Objects.FirstOrDefault(x => x.Attributes.LayerIndex == jointLayer.Index)?.Geometry as Mesh ?? new Mesh();
+                            meshes.Add(mesh);
                         }
-                        break;
+
+                        return meshes;
                     }
                 }
-                if (layer == null)
-                    throw new InvalidOperationException($" Robot \"{model}\" is not in the geometry file.");
-            }
 
-            return meshes;
+                throw new InvalidOperationException($" Robot \"{model}\" is not in the geometry file.");
+            }
+            else
+            {
+                throw new DirectoryNotFoundException($" Robots folder not found in the Documents folder.");
+            }
         }
 
         internal static Mechanism Create(XElement element)
         {
             var modelName = element.Attribute(XName.Get("model")).Value;
             var manufacturer = (Manufacturers)Enum.Parse(typeof(Manufacturers), element.Attribute(XName.Get("manufacturer")).Value);
-            string fullName = $"{element.Name.LocalName}.{manufacturer.ToString()}.{modelName}";
+            string fullName = $"{element.Name.LocalName}.{manufacturer}.{modelName}";
 
             bool movesRobot = false;
             var movesRobotAttribute = element.Attribute(XName.Get("movesRobot"));
@@ -162,6 +164,10 @@ namespace Robots
                                 return new RobotKuka(modelName, payload, basePlane, baseMesh, joints);
                             case (Manufacturers.UR):
                                 return new RobotUR(modelName, payload, basePlane, baseMesh, joints);
+                            //case (Manufacturers.FANUC):
+                            //    return new RobotFanuc(modelName, payload, basePlane, baseMesh, joints);
+                            case (Manufacturers.Staubli):
+                                return new RobotStaubli(modelName, payload, basePlane, baseMesh, joints);
                             default:
                                 return null;
                         }
@@ -170,10 +176,11 @@ namespace Robots
                     return new Positioner(modelName, manufacturer, payload, basePlane, baseMesh, joints, movesRobot);
                 case ("Track"):
                     return new Track(modelName, manufacturer, payload, basePlane, baseMesh, joints, movesRobot);
+                case ("Custom"):
+                    return new Custom(modelName, manufacturer, payload, basePlane, baseMesh, joints, movesRobot);
                 default:
                     return null;
             }
-
         }
 
         /*
@@ -209,7 +216,7 @@ namespace Robots
         }
         */
 
-        public abstract KinematicSolution Kinematics(Target target, double[] prevJoints = null, bool displayMeshes = false, Plane? basePlane = null);
+        public abstract KinematicSolution Kinematics(Target target, double[] prevJoints = null, Plane? basePlane = null);
 
         protected abstract void SetStartPlanes();
         public abstract double DegreeToRadian(double degree, int i);
@@ -220,7 +227,7 @@ namespace Robots
         {
             protected Mechanism mechanism;
 
-            internal MechanismKinematics(Mechanism mechanism, Target target, double[] prevJoints, bool displayMeshes, Plane? basePlane)
+            internal MechanismKinematics(Mechanism mechanism, Target target, double[] prevJoints, Plane? basePlane)
             {
                 this.mechanism = mechanism;
                 int jointCount = mechanism.Joints.Length;
@@ -228,17 +235,13 @@ namespace Robots
                 // Init properties
                 Joints = new double[jointCount];
                 Planes = new Plane[jointCount + 1];
-                if (displayMeshes)
-                    Meshes = new Mesh[jointCount + 1];
-                else
-                    Meshes = new Mesh[0];
 
                 // Base plane
                 Planes[0] = mechanism.BasePlane;
 
                 if (basePlane != null)
                 {
-                    Planes[0].Transform(Transform.PlaneToPlane(Plane.WorldXY,(Plane)basePlane));
+                    Planes[0].Transform(Transform.PlaneToPlane(Plane.WorldXY, (Plane)basePlane));
                 }
 
                 SetJoints(target, prevJoints);
@@ -250,10 +253,6 @@ namespace Robots
                 var transform = Planes[0].ToTransform();
                 for (int i = 1; i < jointCount + 1; i++)
                     Planes[i].Transform(transform);
-
-                // Meshes
-                if (displayMeshes)
-                    SetMeshes(target.Tool);
             }
 
             protected abstract void SetJoints(Target target, double[] prevJoints);
@@ -263,23 +262,8 @@ namespace Robots
             {
                 var outofRangeErrors = mechanism.Joints
                 .Where(x => !x.Range.IncludesParameter(Joints[x.Index]))
-                .Select(x => $"Axis {x.Number + 1} is outside the permited range.");
+                .Select(x => $"Axis {x.Number + 1} is outside the permitted range.");
                 Errors.AddRange(outofRangeErrors);
-            }
-
-            void SetMeshes(Tool tool)
-            {
-                {
-                    Meshes[0] = mechanism.BaseMesh.DuplicateMesh();
-                    Meshes[0].Transform(Planes[0].ToTransform());
-                }
-
-                for (int i = 0; i < mechanism.Joints.Length; i++)
-                {
-                    var jointMesh = mechanism.Joints[i].Mesh.DuplicateMesh();
-                    jointMesh.Transform(Transform.PlaneToPlane(mechanism.Joints[i].Plane, Planes[i + 1]));
-                    Meshes[i + 1] = jointMesh;
-                }
             }
         }
     }
@@ -292,24 +276,21 @@ namespace Robots
         internal double D { get; set; }
         public Interval Range { get; internal set; }
         public double MaxSpeed { get; internal set; }
-        internal Plane Plane { get; set; }
-        internal Mesh Mesh { get; set; }
+        public Plane Plane { get; set; }
+        public Mesh Mesh { get; set; }
     }
 
     public class BaseJoint
     {
-
     }
 
     public class RevoluteJoint : Joint
     {
-
     }
 
     public class PrismaticJoint : Joint
     {
     }
-
 
     [Serializable]
     class JointMeshes

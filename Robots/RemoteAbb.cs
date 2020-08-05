@@ -17,7 +17,7 @@ using System.IO;
 namespace Robots
 {
     public class RemoteAbb : IRemote
-    {
+    {        
         internal bool Connected => _controller != null && _controller.Connected;
         //internal Mesh[] Meshes { get; private set; }
         public string IP { get; set; }
@@ -40,7 +40,7 @@ namespace Robots
             Log.Insert(0, $"{DateTime.Now.ToLongTimeString()} - {text}");
         }
 
-        void Connect()
+       public void Connect()
         {
             Disconnect();
             NetworkScanner scanner = new NetworkScanner();
@@ -76,7 +76,7 @@ namespace Robots
             }
         }
 
-        void Disconnect()
+       public void Disconnect()
         {
             if (_controller != null)
             {
@@ -96,6 +96,7 @@ namespace Robots
             Disconnect();
         }
 
+        [Obsolete]
         string StartCommand()
         {
             if (_controller.OperatingMode != ControllerOperatingMode.Auto)
@@ -143,7 +144,7 @@ namespace Robots
                 if (!_controller.IsVirtual)
                 {
                     _controller.AuthenticationSystem.DemandGrant(Grant.WriteFtp);
-                    _controller.FileSystem.PutDirectory(tempPath, program.Name, true);
+                    _controller.FileSystem.PutDirectory(localFolder, program.Name, true);
                     filePath = $@"{robotFolder}\{program.Name}_T_ROB1.pgf";
                 }
                 else
@@ -155,8 +156,22 @@ namespace Robots
                 {
                     var task = _controller.Rapid.GetTasks().First();
                     task.DeleteProgram();
-                    _controller.AuthenticationSystem.DemandGrant(Grant.LoadRapidProgram);
-                    task.LoadProgramFromFile(filePath, RapidLoadMode.Replace);
+                    int count = 0;
+                    while (count++ < 10)
+                    {
+                        System.Threading.Thread.Sleep(100);
+                        try
+                        {
+                            _controller.AuthenticationSystem.DemandGrant(Grant.LoadRapidProgram);
+                            if (task.LoadProgramFromFile(filePath, RapidLoadMode.Replace))
+                                return $"Program {program.Name} uploaded to {_controller.Name}.";
+                        }
+                        catch (Exception e)
+                        {
+                            Log.Insert(0,$"Retrying {count}: {e}");
+                        }
+                    }
+
                     //    task.ResetProgramPointer();
                 }
             }
@@ -165,25 +180,21 @@ namespace Robots
                 return $"Error uploading: {e}";
             }
 
-            return $"Program {program.Name} uploaded to {_controller.Name}.";
+            return "Unknown error";
         }
 
-        //void GetPosition(Program program)
-        //{
-        //    if (!Connected) return;
+        public JointTarget GetPosition()
+        {
+            if (!Connected) Connect();// return Target.Default as JointTarget;
 
-        //    var robot = program.RobotSystem;
-        //    var refTarget = program.Targets[0].ProgramTargets[0].Target;
-        //    var joints = _controller.MotionSystem.ActiveMechanicalUnit.GetPosition();
-        //    var values = new double[] { joints.RobAx.Rax_1, joints.RobAx.Rax_2, joints.RobAx.Rax_3, joints.RobAx.Rax_4, joints.RobAx.Rax_5, joints.RobAx.Rax_6 };
+            var joints = _controller.MotionSystem.ActiveMechanicalUnit.GetPosition();
+            var values = new double[] { joints.RobAx.Rax_1, joints.RobAx.Rax_2, joints.RobAx.Rax_3, joints.RobAx.Rax_4, joints.RobAx.Rax_5, joints.RobAx.Rax_6 };
 
-        //    for (int i = 0; i < 6; i++)
-        //        values[i] = robot.DegreeToRadian(values[i], i);
+            for (int i = 0; i < 6; i++)
+                values[i] = RobotAbb.ABBDegreeToRadian(values[i], i);
 
-        //    var target = new Robots.JointTarget(values, refTarget.Tool, Speed.Default, Zone.Default, null, refTarget.Frame);
-        //    var targets = new List<Target> { target };
-        //    var kinematics = robot.Kinematics(targets, null, true);
-        //    this.Meshes = kinematics[0].Meshes;
-        //}
+            var target = new JointTarget(values);
+            return target;
+        }
     }
 }

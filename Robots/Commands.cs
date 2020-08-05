@@ -1,23 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Rhino.Geometry;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace Robots
 {
     public abstract class Command : TargetAttribute
     {
         protected virtual void ErrorChecking(RobotSystem robotSystem) { }
+        protected virtual void Populate() { }
 
-        protected virtual string DeclarationAbb(RobotSystem robotSystem) => null;
-        protected virtual string DeclarationKuka(RobotSystem robotSystem) => null;
-        protected virtual string DeclarationUR(RobotSystem robotSystem) => null;
+        protected Dictionary<Manufacturers, Func<RobotSystem, string>> _declarations = new Dictionary<Manufacturers, Func<RobotSystem, string>>(4);
+        protected Dictionary<Manufacturers, Func<RobotSystem, Target, string>> _commands = new Dictionary<Manufacturers, Func<RobotSystem, Target, string>>(4);
 
-        protected virtual string CodeAbb(RobotSystem robotSystem, Target target) { throw new Exception($"Command {this.GetType().Name} for ABB not implemented."); }
-        protected virtual string CodeKuka(RobotSystem robotSystem, Target target) { throw new Exception($"Command {this.GetType().Name} for KUKA not implemented."); }
-        protected virtual string CodeUR(RobotSystem robotSystem, Target target) { throw new Exception($"Command {this.GetType().Name} for UR not implemented."); }
+        public bool RunBefore { get; set; } = false;
 
         public static Command Default { get; }
 
@@ -26,28 +21,35 @@ namespace Robots
             Default = new Commands.Custom("DefaultCommand");
         }
 
-        internal string Declaration(RobotSystem robotSystem)
+        internal string Declaration(Program program)
         {
-            ErrorChecking(robotSystem);
+            var robot = program.RobotSystem;
+            ErrorChecking(robot);
 
-            switch(robotSystem.Manufacturer)
-            {
-                case (Manufacturers.ABB): return DeclarationAbb(robotSystem);
-                case (Manufacturers.KUKA): return DeclarationKuka(robotSystem);
-                case (Manufacturers.UR): return DeclarationUR(robotSystem);
-                default: return null;
-            }
+            _declarations.Clear();
+            _commands.Clear();
+            Populate();
+
+            if (_declarations.TryGetValue(robot.Manufacturer, out var declaration))
+                return declaration(robot);
+            else if (_declarations.TryGetValue(Manufacturers.All, out declaration))
+                return declaration(robot);
+
+            return null;
         }
 
-        internal string Code(RobotSystem robotSystem, Target target)
+        internal string Code(Program program, Target target)
         {
-            switch (robotSystem.Manufacturer)
-            {
-                case (Manufacturers.ABB): return CodeAbb(robotSystem, target);
-                case (Manufacturers.KUKA): return CodeKuka(robotSystem, target);
-                case (Manufacturers.UR): return CodeUR(robotSystem, target);
-                default: return null;
-            }
+            var robot = program.RobotSystem;
+
+            if (_commands.TryGetValue(robot.Manufacturer, out var command))
+                return command(robot, target);
+            else if (_commands.TryGetValue(Manufacturers.All, out command))
+                return command(robot, target);
+
+            program.Warnings.Add($"Command {Name} not implemented for {robot.Manufacturer} robots.");
+
+            return null;
         }
     }
 }
@@ -56,40 +58,43 @@ namespace Robots.Commands
 {
     public class Custom : Command
     {
-        string name;
-        string abbDeclaration, abbCode;
-        string kukaDeclaration, kukaCode;
-        string urDeclaration, urCode;
+        readonly Dictionary<Manufacturers, string> _customCommands = new Dictionary<Manufacturers, string>();
+        readonly Dictionary<Manufacturers, string> _customDeclarations = new Dictionary<Manufacturers, string>();
 
-        public Custom(string name = "Custom command", string abbDeclaration = null, string kukaDeclaration = null, string urDeclaration = null, string abbCode = null, string kukaCode = null, string urCode = null)
+        public Custom(string name = "Custom command", Manufacturers manufacturer = Manufacturers.All, string command = null, string declaration = null)
         {
-            this.name = name;
-            this.abbDeclaration = abbDeclaration;
-            this.kukaDeclaration = kukaDeclaration;
-            this.urDeclaration = urDeclaration;
-            this.abbCode = abbCode;
-            this.kukaCode = kukaCode;
-            this.urCode = urCode;
+            Name = name;
+
+            if (command != null || declaration != null)
+                AddCommand(manufacturer, command, declaration);
         }
 
-        protected override string DeclarationAbb(RobotSystem robotSystem) => abbDeclaration;
-        protected override string DeclarationKuka(RobotSystem robotSystem) => kukaDeclaration;
-        protected override string DeclarationUR(RobotSystem robotSystem) => urDeclaration;
+        public void AddCommand(Manufacturers manufacturer, string command, string declaration = null)
+        {
+            _customCommands.Add(manufacturer, command);
+            _customDeclarations.Add(manufacturer, declaration);
+        }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target) => abbCode;
-        protected override string CodeKuka(RobotSystem robotSystem, Target target) => kukaCode;
-        protected override string CodeUR(RobotSystem robotSystem, Target target) => urCode;
+        protected override void Populate()
+        {
+            foreach (var command in _customCommands)
+                _commands.Add(command.Key, (_, __) => command.Value);
 
-        public override string ToString() => $"Command ({name})";
+            foreach (var declaration in _customDeclarations)
+                _declarations.Add(declaration.Key, _ => declaration.Value);
+        }
+
+        public override string ToString() => $"Command ({Name})";
     }
 
     public class Group : Command, IList<Command>
     {
-        List<Command> commands = new List<Command>();
+        readonly List<Command> commands = new List<Command>();
 
         public Group() { }
         public Group(IEnumerable<Command> commands)
         {
+            Name = "Group command";
             this.commands.AddRange(commands);
         }
 
@@ -99,6 +104,7 @@ namespace Robots.Commands
             get { return commands[index]; }
             set { commands[index] = value; }
         }
+
         public int Count => commands.Count;
         public bool IsReadOnly => false;
         public void Add(Command item) => commands.Add(item);
@@ -118,8 +124,8 @@ namespace Robots.Commands
             var commands = new List<Command>();
             foreach (var command in this.commands)
             {
-                if (command is Group)
-                    commands.AddRange((command as Group).Flatten());
+                if (command is Group group)
+                    commands.AddRange(group.Flatten());
                 else
                     commands.Add(command);
             }
@@ -129,7 +135,6 @@ namespace Robots.Commands
 
         public override string ToString() => $"Command (Group with {Count} commands)";
     }
-
 
     public class SetDO : Command
     {
@@ -148,7 +153,15 @@ namespace Robots.Commands
             if (DO > robotSystem.IO.DO.Length - 1) throw new Exception(" Index of digital output is too high.");
         }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target)
+        protected override void Populate()
+        {
+            _commands.Add(Manufacturers.ABB, CodeAbb);
+            _commands.Add(Manufacturers.KUKA, CodeKuka);
+            _commands.Add(Manufacturers.UR, CodeUR);
+            _commands.Add(Manufacturers.Staubli, CodeStaubli);
+        }
+
+        string CodeAbb(RobotSystem robotSystem, Target target)
         {
             string textValue = Value ? "1" : "0";
 
@@ -158,7 +171,7 @@ namespace Robots.Commands
                 return $@"SetDO \Sync ,{robotSystem.IO.DO[DO]},{textValue};";
         }
 
-        protected override string CodeKuka(RobotSystem robotSystem, Target target)
+        string CodeKuka(RobotSystem robotSystem, Target target)
         {
             string textValue = Value ? "TRUE" : "FALSE";
 
@@ -168,12 +181,17 @@ namespace Robots.Commands
                 return $"$OUT[{robotSystem.IO.DO[DO]}] = {textValue}";
         }
 
-        protected override string CodeUR(RobotSystem robotSystem, Target target)
+        string CodeUR(RobotSystem robotSystem, Target target)
         {
             string textValue = Value ? "True" : "False";
             return $"set_digital_out({robotSystem.IO.DO[DO]},{textValue})";
         }
 
+        string CodeStaubli(RobotSystem robotSystem, Target target)
+        {
+            string textValue = Value ? "true" : "false";
+            return $"waitEndMove()\r\ndos[{DO}] = {textValue}";
+        }
 
         public override string ToString() => $"Command (DO {DO} set to {Value})";
     }
@@ -195,34 +213,57 @@ namespace Robots.Commands
             if (AO > robotSystem.IO.AO.Length - 1) throw new Exception(" Index of analog output is too high.");
         }
 
-        protected override string DeclarationAbb(RobotSystem robotSystem)
+        protected override void Populate()
         {
-            return $"PERS num {this.Name};\r\n{this.Name} := {this.Value:0.000};";
+            _commands.Add(Manufacturers.ABB, CodeAbb);
+            _commands.Add(Manufacturers.KUKA, CodeKuka);
+            _commands.Add(Manufacturers.UR, CodeUR);
+            _commands.Add(Manufacturers.Staubli, CodeStaubli);
+
+            _declarations.Add(Manufacturers.ABB, DeclarationAbb);
+            _declarations.Add(Manufacturers.KUKA, DeclarationKuka);
+            _declarations.Add(Manufacturers.UR, DeclarationUR);
+            _declarations.Add(Manufacturers.Staubli, DeclarationStaubli);
         }
 
-        protected override string DeclarationKuka(RobotSystem robotSystem)
+        string DeclarationAbb(RobotSystem robotSystem)
         {
-            return $"DECL GLOBAL REAL {this.Name} = {this.Value:0.000}";
+            return $"PERS num {Name};\r\n{Name} := {Value:0.###};";
         }
 
-        protected override string DeclarationUR(RobotSystem robotSystem)
+        string DeclarationKuka(RobotSystem robotSystem)
         {
-            return $"{this.Name} = {this.Value:0.000}";
+            return $"DECL GLOBAL REAL {Name} = {Value:0.###}";
         }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target)
+        string DeclarationUR(RobotSystem robotSystem)
         {
-            return $"SetAO {robotSystem.IO.AO[AO]},{this.Name};";
+            return $"{Name} = {Value:0.###}";
         }
 
-        protected override string CodeKuka(RobotSystem robotSystem, Target target)
+        string DeclarationStaubli(RobotSystem robotSystem)
         {
-            return $@"$ANOUT[{robotSystem.IO.AO[AO]}] = {this.Name}";
+            return RobotCellStaubli.VAL3Syntax.NumData(Name, Value);
         }
 
-        protected override string CodeUR(RobotSystem robotSystem, Target target)
+        string CodeAbb(RobotSystem robotSystem, Target target)
         {
-            return $"set_analog_out({robotSystem.IO.AO[AO]},{this.Name})";
+            return $"SetAO {robotSystem.IO.AO[AO]},{Name};";
+        }
+
+        string CodeKuka(RobotSystem robotSystem, Target target)
+        {
+            return $"$ANOUT[{robotSystem.IO.AO[AO]}] = {Name}";
+        }
+
+        string CodeUR(RobotSystem robotSystem, Target target)
+        {
+            return $"set_analog_out({robotSystem.IO.AO[AO]},{Name})";
+        }
+
+        string CodeStaubli(RobotSystem robotSystem, Target target)
+        {
+            return $"aioSet(aos[{AO}], {Name})";
         }
 
         public override string ToString() => $"Command (AO {AO} set to \"{Value}\")";
@@ -231,7 +272,8 @@ namespace Robots.Commands
     public class PulseDO : Command
     {
         public int DO { get; }
-        double length;
+
+        readonly double length;
 
         public PulseDO(int DO, double length = 0.2)
         {
@@ -245,22 +287,23 @@ namespace Robots.Commands
             if (DO > robotSystem.IO.DO.Length - 1) throw new Exception(" Index of digital output is too high.");
         }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target)
+        protected override void Populate()
+        {
+            _commands.Add(Manufacturers.ABB, CodeAbb);
+            _commands.Add(Manufacturers.KUKA, CodeKuka);
+        }
+
+        string CodeAbb(RobotSystem robotSystem, Target target)
         {
             return $@"PulseDO \PLength:={length:0.00}, {robotSystem.IO.DO[DO]};";
         }
 
-        protected override string CodeKuka(RobotSystem robotSystem, Target target)
+        string CodeKuka(RobotSystem robotSystem, Target target)
         {
             if (target.Zone.IsFlyBy)
                 return $"CONTINUE\r\nPULSE($OUT[{robotSystem.IO.DO[DO]}],TRUE,{length:0.00})";
             else
                 return $"PULSE($OUT[{robotSystem.IO.DO[DO]}],TRUE,{length:0.00})";
-        }
-
-        protected override string CodeUR(RobotSystem robotSystem, Target target)
-        {
-            return $"set_digital_out({robotSystem.IO.DO[DO]},True\n  set_digital_out({robotSystem.IO.DO[DO]},False)";
         }
 
         public override string ToString() => $"Command (Pulse {DO} for {length:0.00} secs)";
@@ -272,44 +315,66 @@ namespace Robots.Commands
 
         public Wait(double seconds)
         {
-            this.Seconds = seconds;
+            Seconds = seconds;
         }
 
-
-        protected override string DeclarationAbb(RobotSystem robotSystem)
+        protected override void Populate()
         {
-            return $"PERS num {this.Name} := {this.Seconds:0.00};";
+            _commands.Add(Manufacturers.ABB, CodeAbb);
+            _commands.Add(Manufacturers.KUKA, CodeKuka);
+            _commands.Add(Manufacturers.UR, CodeUR);
+            _commands.Add(Manufacturers.Staubli, CodeStaubli);
+
+            _declarations.Add(Manufacturers.ABB, DeclarationAbb);
+            _declarations.Add(Manufacturers.KUKA, DeclarationKuka);
+            _declarations.Add(Manufacturers.UR, DeclarationUR);
+            _declarations.Add(Manufacturers.Staubli, DeclarationStaubli);
         }
 
-        protected override string DeclarationKuka(RobotSystem robotSystem)
+        string DeclarationAbb(RobotSystem robotSystem)
         {
-            return $"DECL GLOBAL REAL {this.Name} = {this.Seconds:0.00}";
+            return $"PERS num {Name}:={Seconds:0.###};";
         }
 
-        protected override string DeclarationUR(RobotSystem robotSystem)
+        string DeclarationKuka(RobotSystem robotSystem)
         {
-            return $"{this.Name} = {this.Seconds:0.00}";
+            return $"DECL GLOBAL REAL {Name} = {Seconds:0.###}";
         }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target)
+        string DeclarationUR(RobotSystem robotSystem)
+        {
+            return $"{Name} = {Seconds:0.###}";
+        }
+
+        string DeclarationStaubli(RobotSystem robotSystem)
+        {
+            return RobotCellStaubli.VAL3Syntax.NumData(Name, Seconds);
+        }
+
+        string CodeAbb(RobotSystem robotSystem, Target target)
         {
             if (target.Zone.IsFlyBy)
-                return $@"WaitTime {this.Name};";
+                return $"WaitTime {Name};";
             else
-                return $@"WaitTime \InPos,{this.Name};";
+                return $@"WaitTime \InPos,{Name};";
         }
 
-        protected override string CodeKuka(RobotSystem robotSystem, Target target)
+        string CodeKuka(RobotSystem robotSystem, Target target)
         {
             if (target.Zone.IsFlyBy)
-                return $"CONTINUE\r\nWAIT SEC {this.Name}";
+                return $"CONTINUE\r\nWAIT SEC {Name}";
             else
-                return $"WAIT SEC {this.Name}";
+                return $"WAIT SEC {Name}";
         }
 
-        protected override string CodeUR(RobotSystem robotSystem, Target target)
+        string CodeUR(RobotSystem robotSystem, Target target)
         {
-            return $"sleep({this.Name})";
+            return $"sleep({Name})";
+        }
+
+        string CodeStaubli(RobotSystem robotSystem, Target target)
+        {
+            return $"waitEndMove()\r\ndelay({Name})";
         }
 
         public override string ToString() => $"Command (Wait {Seconds} secs)";
@@ -323,31 +388,47 @@ namespace Robots.Commands
         public WaitDI(int DI, bool value = true)
         {
             this.DI = DI;
-            this.Value = value;
+            Value = value;
         }
 
         protected override void ErrorChecking(RobotSystem robotSystem)
         {
             if (robotSystem.IO.DI == null) throw new Exception(" Robot contains no digital inputs.");
-            if (DI > robotSystem.IO.DI.Length - 1) throw new Exception(" Index of digital inputs is too high.");
+            if (DI > robotSystem.IO.DI.Length - 1) throw new Exception(" Index of digital input is too high.");
         }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target)
+        protected override void Populate()
+        {
+            _commands.Add(Manufacturers.ABB, CodeAbb);
+            _commands.Add(Manufacturers.KUKA, CodeKuka);
+            _commands.Add(Manufacturers.UR, CodeUR);
+            _commands.Add(Manufacturers.Staubli, CodeStaubli);
+        }
+
+        string CodeAbb(RobotSystem robotSystem, Target target)
         {
             string textValue = Value ? "1" : "0";
             return $"WaitDI {robotSystem.IO.DI[DI]},{textValue};";
         }
 
-        protected override string CodeKuka(RobotSystem robotSystem, Target target)
+        string CodeKuka(RobotSystem robotSystem, Target target)
         {
             string textValue = Value ? "TRUE" : "FALSE";
             return $"WAIT FOR $IN[{robotSystem.IO.DI[DI]}]=={textValue}";
         }
 
-        protected override string CodeUR(RobotSystem robotSystem, Target target)
+        string CodeUR(RobotSystem robotSystem, Target target)
         {
-            string textValue = Value ? "True" : "False";
-            return $"while get_digital_in({robotSystem.IO.DI[DI]}) = {textValue}: end";
+            //string textValue = Value ? "True" : "False";
+            const string indent = "  ";
+            string textValue = Value ? "not " : "";
+            return $"while {textValue}get_digital_in({robotSystem.IO.DI[DI]}):\r\n{indent}{indent}sleep(0.008)\r\n{indent}end";
+        }
+
+        string CodeStaubli(RobotSystem robotSystem, Target target)
+        {
+            string textValue = Value ? "true" : "false";
+            return $"waitEndMove()\r\nwait(dis[{DI}] == {textValue})";
         }
 
         public override string ToString() => $"Command (WaitDI until {DI} is {Value})";
@@ -357,48 +438,34 @@ namespace Robots.Commands
     {
         public Stop() { }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target)
+        protected override void Populate()
         {
-            return $"Stop;";
+            _commands.Add(Manufacturers.ABB, (_, __) => "Stop;");
+            _commands.Add(Manufacturers.KUKA, (_, __) => "HALT");
+            _commands.Add(Manufacturers.UR, (_, __) => "pause program");
+            //_commands.Add(Manufacturers.Staubli, (_, __) => "wait(true)");
         }
 
-        protected override string CodeKuka(RobotSystem robotSystem, Target target)
-        {
-            return $"HALT";
-        }
-
-        protected override string CodeUR(RobotSystem robotSystem, Target target)
-        {
-            return $"pause program";
-        }
-
-        public override string ToString() => $"Command (Stop)";
+        public override string ToString() => "Command (Stop)";
     }
 
     public class Message : Command
     {
-        string message;
+        readonly string _message;
 
         public Message(string message)
         {
-            this.message = message;
+            _message = message;
         }
 
-        protected override string CodeAbb(RobotSystem robotSystem, Target target)
+        protected override void Populate()
         {
-            return $"TPWrite \"{message}\";";
+            _commands.Add(Manufacturers.ABB, (_, __) => $"TPWrite \"{_message}\";");
+            _commands.Add(Manufacturers.KUKA, (_, __) => $"; \"{_message}\"");
+            _commands.Add(Manufacturers.UR, (_, __) => $"textmsg(\"{_message}\")");
+            _commands.Add(Manufacturers.Staubli, (_, __) => $"putln(\"{_message}\")");
         }
 
-        protected override string CodeKuka(RobotSystem robotSystem, Target target)
-        {
-            return $"; \"{message}\"";
-        }
-
-        protected override string CodeUR(RobotSystem robotSystem, Target target)
-        {
-            return $"textmsg(\"{message})\"";
-        }
-
-        public override string ToString() => $"Command (Message \"{message}\")";
+        public override string ToString() => $"Command (Message \"{_message}\")";
     }
 }
